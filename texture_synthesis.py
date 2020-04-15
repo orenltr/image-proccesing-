@@ -1,22 +1,15 @@
-# -*- coding: utf-8 -*-
-
-# Form implementation generated from reading ui file 'texture_synthesis.ui'
-#
-# Created by: PyQt5 UI code generator 5.13.0
-#
-# WARNING! All changes made in this file will be lost!
-
-
+import sys
+import os
+import cv2
+import numpy as np
+from math import ceil
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication,QWidget, QVBoxLayout, QPushButton, QFileDialog , QLabel, QTextEdit
-import sys
 from PyQt5.QtGui import QPixmap
 import non_parametric_sampling
 from non_parametric_sampling import *
-import cv2
-import os
-import numpy as np
-
+from generate import *
+from itertools import product
 
 
 
@@ -168,13 +161,16 @@ class Ui_MainWindow(object):
 
     def run(self, sample_path):
 
-        # sample = cv2.imread(sample_path)
+        # arguments for
         window_height = int(self.input_hight.text())
         window_width = int(self.input_width.text())
         overlap = float(self.input_overlap.text())
         tolerance = float(self.input_tolerance.text())
-        # window_height = int(self.input_kernel.text())
         args = Args(sample_path,hight=window_height,width=window_width,overlap=overlap,tolerance=tolerance)
+
+        # which synthesis method
+        if self.input_method.currentIndex() == 0:
+            self.imageQuilting(args)
         if self.input_method.currentIndex() == 1:
             self.nonParametricSampling(args)
 
@@ -193,13 +189,33 @@ class Ui_MainWindow(object):
         # sample = cv2.imread(r'textures\t5.png')
         non_parametric_sampling.validate_args(args)
 
-        synthesized_texture = self.synthesize_texture(original_sample=sample,
+        synthesized_texture = self.synthesizeTexture(original_sample=sample,
                                                  window_size=(args.window_height, args.window_width),
                                                  kernel_size=args.kernel_size)
-        x=1
 
-    def synthesize_texture(self,original_sample, window_size, kernel_size, visualize=True):
-        global gif_count
+    def imageQuilting(self, args):
+        sample = cv2.imread(sample_path)
+        sample = cv2.cvtColor(sample, cv2.COLOR_BGR2RGB) / 255.0
+        # non_parametric_sampling.validate_args(args)
+        if args.overlap > 0:
+            args.overlap = int(args.kernel_size * args.overlap)
+        else:
+            args.overlap = int(args.kernel_size / 6.0)
+
+        synthesized_texture = self.generateTextureMap(sample, args.kernel_size, args.overlap, args.window_height, args.window_width, args.tolerance)
+
+        # # Save
+        # synthesized_texture = (255 * synthesized_texture).astype(np.uint8)
+        # synthesized_texture = cv2.cvtColor(synthesized_texture, cv2.COLOR_RGB2BGR)
+        # if args.num_outputs == 1:
+        #     cv2.imwrite(args.output_file, synthesized_texture)
+        #     print("Saved output to {}".format(args.output_file))
+        # else:
+        #     cv2.imwrite(args.output_file.replace(".", "_{}.".format(i)), synthesized_texture)
+        #     print("Saved output to {}".format(args.output_file.replace(".", "_{}.".format(i))))
+
+    def synthesizeTexture(self, original_sample, window_size, kernel_size, visualize=True):
+        # global gif_count
         (sample, window, mask, padded_window,
          padded_mask, result_window) = initialize_texture_synthesis(original_sample, window_size, kernel_size)
 
@@ -234,8 +250,6 @@ class Ui_MainWindow(object):
                     height, width, channel = result_window.shape
                     bytesPerLine = 3 * width
                     qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888).rgbSwapped()
-                    # result_qimage = QtGui.QImage(result_window.data, result_window.shape[1], result_window.shape[0],
-                    #                           QtGui.QImage.Format_RGB888).rgbSwapped()
                     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
                     key = cv2.waitKey(1)
                     if key == 27:
@@ -244,18 +258,124 @@ class Ui_MainWindow(object):
 
         if visualize:
             cv2.imshow('synthesis window', result_window)
-            # self.image = QtGui.QImage(self.image.data, self.image.shape[1], self.image.shape[0],
-            #                           QtGui.QImage.Format_RGB888).rgbSwapped()
-            # self.image_frame.setPixmap(QtGui.QPixmap.fromImage(self.image))
+            height, width, channel = result_window.shape
+            bytesPerLine = 3 * width
+            qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine,
+                                QtGui.QImage.Format_RGB888).rgbSwapped()
+            self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
         return result_window
 
+    def generateTextureMap(self, image, blocksize, overlap, window_height, window_width, tolerance, visualize=True):
+        nH = int(ceil((window_height - blocksize) * 1.0 / (blocksize - overlap)))  # number of blocks in output image
+        nW = int(ceil((window_width - blocksize) * 1.0 / (blocksize - overlap)))
 
+        result_window = np.zeros(((blocksize + nH * (blocksize - overlap)),
+                                  (blocksize + nW * (blocksize - overlap)), image.shape[2]))
+
+
+        # Starting index and block
+        H, W = image.shape[:2]
+        randH = np.random.randint(H - blocksize)
+        randW = np.random.randint(W - blocksize)
+
+        startBlock = image[randH:randH + blocksize, randW:randW + blocksize]
+        result_window[:blocksize, :blocksize, :] = startBlock
+
+        # Fill the first row 
+        for i, blkIdx in enumerate(range((blocksize - overlap), result_window.shape[1] - overlap, (blocksize - overlap))):
+            # Find horizontal error for this block
+            # Calculate min, find index having tolerance
+            # Choose one randomly among them
+            # blkIdx = block index to put in
+            refBlock = result_window[:blocksize, (blkIdx - blocksize + overlap):(blkIdx + overlap)]
+            patchBlock = findPatchHorizontal(refBlock, image, blocksize, overlap, tolerance)
+            minCutPatch = getMinCutPatchHorizontal(refBlock, patchBlock, blocksize, overlap)
+            result_window[:blocksize, (blkIdx):(blkIdx + blocksize)] = minCutPatch
+
+            if visualize:
+                result_view = (255 * result_window).astype(np.uint8)
+                result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+                cv2.imshow('synthesis window', result_view)
+                height, width, channel = result_view.shape
+                bytesPerLine = 3 * width
+                qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                    QtGui.QImage.Format_RGB888).rgbSwapped()
+                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                key = cv2.waitKey(1)
+                if key == 27:
+                    cv2.destroyAllWindows()
+                    return result_view
+            
+        # print("{} out of {} rows complete...".format(1, nH + 1))
+        
+        ### Fill the first column
+        for i, blkIdx in enumerate(range((blocksize - overlap), result_window.shape[0] - overlap, (blocksize - overlap))):
+            # Find vertical error for this block
+            # Calculate min, find index having tolerance
+            # Choose one randomly among them
+            # blkIdx = block index to put in
+            refBlock = result_window[(blkIdx - blocksize + overlap):(blkIdx + overlap), :blocksize]
+            patchBlock = findPatchVertical(refBlock, image, blocksize, overlap, tolerance)
+            minCutPatch = getMinCutPatchVertical(refBlock, patchBlock, blocksize, overlap)
+
+            result_window[(blkIdx):(blkIdx + blocksize), :blocksize] = minCutPatch
+
+            if visualize:
+                result_view = (255 * result_window).astype(np.uint8)
+                result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+                cv2.imshow('synthesis window', result_view)
+                height, width, channel = result_view.shape
+                bytesPerLine = 3 * width
+                qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                    QtGui.QImage.Format_RGB888).rgbSwapped()
+                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                key = cv2.waitKey(1)
+                if key == 27:
+                    cv2.destroyAllWindows()
+                    return result_view
+
+        ### Fill in the other rows and columns
+        for i in range(1, nH + 1):
+            for j in range(1, nW + 1):
+                # Choose the starting index for the texture placement
+                block_index_i = i * (blocksize - overlap)
+                block_index_j = j * (blocksize - overlap)
+                # Find the left and top block, and the min errors independently
+                refBlockLeft = result_window[(block_index_i):(block_index_i + blocksize),
+                               (block_index_j - blocksize + overlap):(block_index_j + overlap)]
+                refBlockTop = result_window[(block_index_i - blocksize + overlap):(block_index_i + overlap),
+                              (block_index_j):(block_index_j + blocksize)]
+
+                patchBlock = findPatchBoth(refBlockLeft, refBlockTop, image, blocksize, overlap, tolerance)
+                minCutPatch = getMinCutPatchBoth(refBlockLeft, refBlockTop, patchBlock, blocksize, overlap)
+
+                result_window[(block_index_i):(block_index_i + blocksize), (block_index_j):(block_index_j + blocksize)] = minCutPatch
+
+                if visualize:
+                    result_view = (255 * result_window).astype(np.uint8)
+                    result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+                    cv2.imshow('synthesis window', result_view)
+                    height, width, channel = result_view.shape
+                    bytesPerLine = 3 * width
+                    qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                        QtGui.QImage.Format_RGB888).rgbSwapped()
+                    self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                    key = cv2.waitKey(1)
+                    if key == 27:
+                        cv2.destroyAllWindows()
+                        return result_view
+
+            # print("{} out of {} rows complete...".format(i + 1, nH + 1))
+
+
+
+        return result_window
 
 class Args(object):
-    def __init__(self,sample_path,hight=50,width=50,overlap = 1/6,tolerance=0.1, kernel=11):
+    def __init__(self,sample_path,hight=50,width=50,overlap = 1/6,tolerance=0.1, kernel=20):
         self.__window_height = hight
         self.__window_width = width
         self.__kernel_size = kernel
@@ -275,6 +395,9 @@ class Args(object):
     @property
     def overlap(self):
         return self.__overlap
+    @overlap.setter
+    def overlap(self, value):
+        self.__overlap = value
     @property
     def tolerance(self):
         return self.__tolerance
