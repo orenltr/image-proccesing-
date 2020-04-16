@@ -173,7 +173,11 @@ class Ui_MainWindow(object):
         self.output.clicked.connect(self.saveImage)
 
         # generate sample
-        self.generate.clicked.connect(lambda: self.run(sample_path))
+        self.generate.clicked.connect(self.run)
+
+        self.input_method.currentIndexChanged.connect(self.overlapStatus)
+
+
 
 
     def retranslateUi(self, MainWindow):
@@ -206,42 +210,64 @@ class Ui_MainWindow(object):
         self.actionsettings.setText(_translate("MainWindow", "settings"))
 
 
-    def run(self, sample_path):
+    def run(self):
 
-        self.generate.setDisabled(True)
-        # arguments for
-        window_height = int(self.input_hight.text())
-        window_width = int(self.input_width.text())
-        overlap = float(self.input_overlap.text())
-        tolerance = float(self.input_tolerance.text())
-        kernel_size = int(self.input_kernel.text())
-        args = Args(sample_path,hight=window_height,width=window_width,overlap=overlap,tolerance=tolerance, kernel=kernel_size)
+        for p,path in enumerate(sample_paths):
+            self.result.clear()
+            self.sample.clear()
+            self.sample.setPixmap(QPixmap(path))
+            # self.generate.setDisabled(True)
+            # arguments for
+            window_height = int(self.input_hight.text())
+            window_width = int(self.input_width.text())
+            overlap = float(self.input_overlap.text())
+            tolerance = float(self.input_tolerance.text())
+            kernel_size = int(self.input_kernel.text())
+            args = Args(path,hight=window_height,width=window_width,overlap=overlap,tolerance=tolerance, kernel=kernel_size)
 
-        # which synthesis method
-        if self.input_method.currentIndex() == 0:
-            result = self.imageQuilting(args)
-        if self.input_method.currentIndex() == 1:
-            result = self.nonParametricSampling(args)
+            # which synthesis method
+            if self.input_method.currentIndex() == 0:
+                result = self.imageQuilting(args)
+            if self.input_method.currentIndex() == 1:
+                result = self.nonParametricSampling(args)
 
-        cv2.imwrite(output_file, result)
+            if len(sample_paths) > 1:
+                cv2.imwrite(output_directory+"/synth_texture_"+str(p)+".jpg", result)
+
+            else:
+                cv2.imwrite(output_file, result)
+            # cv2.imwrite(output_file, result)
 
 
     def browseImage(self):
-        global sample_path
-        fname = QFileDialog.getOpenFileName(None, 'Open file', filter="Image files (*.jpg *.png)")
-        sample_path = fname[0]
-        self.sample.setPixmap(QPixmap(sample_path))
+        global sample_paths
+        fname = QFileDialog.getOpenFileNames(None, 'Open file', filter="Image files (*.jpg *.png)")
+        sample_paths = fname[0]
+        self.sample.setPixmap(QPixmap(sample_paths[0]))
         self.generate.setDisabled(False)
-        self.input_path.setText(sample_path)
+        self.input_path.setText(sample_paths[0])
 
     def saveImage(self):
         global output_file
-        fname = QFileDialog.getSaveFileName(None, 'Open file', filter="Image files (*.jpg *.png)")
-        output_file = fname[0]
-        self.output_path.setText(output_file)
+        global output_directory
+        if len(sample_paths) > 1:
+            fname = QFileDialog.getExistingDirectory(None,"Select Directory")
+            output_directory = fname
+            self.output_path.setText(output_directory)
+
+        else:
+            fname = QFileDialog.getSaveFileName(None, 'Open file', filter="Image files (*.jpg *.png)")
+            output_file = fname[0]
+            self.output_path.setText(output_file)
+
+    def overlapStatus(self):
+        if self.input_method.currentIndex()==1:
+            self.input_overlap.setDisabled(True)
+        else:
+            self.input_overlap.setDisabled(False)
 
     def nonParametricSampling(self,args):
-        sample = cv2.imread(sample_path)
+        sample = cv2.imread(args.sample_path)
         non_parametric_sampling.validate_args(args)
 
         return self.synthesizeTexture(original_sample=sample,
@@ -249,7 +275,7 @@ class Ui_MainWindow(object):
                                                  kernel_size=args.kernel_size)
 
     def imageQuilting(self, args):
-        sample = cv2.imread(sample_path)
+        sample = cv2.imread(args.sample_path)
         sample = cv2.cvtColor(sample, cv2.COLOR_BGR2RGB) / 255.0
         # non_parametric_sampling.validate_args(args)
         if args.overlap > 0:
@@ -259,9 +285,7 @@ class Ui_MainWindow(object):
 
         return self.generateTextureMap(sample, args.kernel_size, args.overlap, args.window_height, args.window_width, args.tolerance)
 
-
     def synthesizeTexture(self, original_sample, window_size, kernel_size, visualize=True):
-        # global gif_count
         (sample, window, mask, padded_window,
          padded_mask, result_window) = initialize_texture_synthesis(original_sample, window_size, kernel_size)
 
@@ -291,26 +315,35 @@ class Ui_MainWindow(object):
                 mask[ch, cw] = 1
                 result_window[ch, cw] = original_sample[selected_index[0], selected_index[1]]
 
-                if visualize:
-                    cv2.imshow('synthesis window', result_window)
-                    height, width, channel = result_window.shape
-                    bytesPerLine = 3 * width
-                    qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888).rgbSwapped()
-                    self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
-                    key = cv2.waitKey(1)
-                    if key == 27:
-                        cv2.destroyAllWindows()
-                        return result_window
+                # visualize
+                cv2.imshow('synthesis window', result_window)
+                height, width, channel = result_window.shape
+                bytesPerLine = 3 * width
+                qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine,
+                                    QtGui.QImage.Format_RGB888).rgbSwapped()
+                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                key = cv2.waitKey(1)
 
-        if visualize:
-            cv2.imshow('synthesis window', result_window)
-            height, width, channel = result_window.shape
-            bytesPerLine = 3 * width
-            qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine,
-                                QtGui.QImage.Format_RGB888).rgbSwapped()
-            self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+                # if visualize:
+                #     cv2.imshow('synthesis window', result_window)
+                #     height, width, channel = result_window.shape
+                #     bytesPerLine = 3 * width
+                #     qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine, QtGui.QImage.Format_RGB888).rgbSwapped()
+                #     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                #     key = cv2.waitKey(1)
+                #     if key == 27:
+                #         cv2.destroyAllWindows()
+                #         return result_window
+
+        # if visualize:
+        #     cv2.imshow('synthesis window', result_window)
+        #     height, width, channel = result_window.shape
+        #     bytesPerLine = 3 * width
+        #     qImg = QtGui.QImage(result_window.data, width, height, bytesPerLine,
+        #                         QtGui.QImage.Format_RGB888).rgbSwapped()
+        #     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+        #     cv2.waitKey(1)
+        #     cv2.destroyAllWindows()
 
         return result_window
 
@@ -341,19 +374,30 @@ class Ui_MainWindow(object):
             minCutPatch = getMinCutPatchHorizontal(refBlock, patchBlock, blocksize, overlap)
             result_window[:blocksize, (blkIdx):(blkIdx + blocksize)] = minCutPatch
 
-            if visualize:
-                result_view = (255 * result_window).astype(np.uint8)
-                result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
-                cv2.imshow('synthesis window', result_view)
-                height, width, channel = result_view.shape
-                bytesPerLine = 3 * width
-                qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
-                                    QtGui.QImage.Format_RGB888).rgbSwapped()
-                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
-                key = cv2.waitKey(1)
-                if key == 27:
-                    cv2.destroyAllWindows()
-                    return result_view
+            # visualize
+            result_view = (255 * result_window).astype(np.uint8)
+            result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+            cv2.imshow('synthesis window', result_view)
+            height, width, channel = result_view.shape
+            bytesPerLine = 3 * width
+            qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                QtGui.QImage.Format_RGB888).rgbSwapped()
+            self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+            key = cv2.waitKey(1)
+
+            # if visualize:
+            #     result_view = (255 * result_window).astype(np.uint8)
+            #     result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+            #     cv2.imshow('synthesis window', result_view)
+            #     height, width, channel = result_view.shape
+            #     bytesPerLine = 3 * width
+            #     qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+            #                         QtGui.QImage.Format_RGB888).rgbSwapped()
+            #     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+            #     key = cv2.waitKey(1)
+            #     if key == 27:
+            #         cv2.destroyAllWindows()
+            #         return result_view
             
         # print("{} out of {} rows complete...".format(1, nH + 1))
         
@@ -369,19 +413,30 @@ class Ui_MainWindow(object):
 
             result_window[(blkIdx):(blkIdx + blocksize), :blocksize] = minCutPatch
 
-            if visualize:
-                result_view = (255 * result_window).astype(np.uint8)
-                result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
-                cv2.imshow('synthesis window', result_view)
-                height, width, channel = result_view.shape
-                bytesPerLine = 3 * width
-                qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
-                                    QtGui.QImage.Format_RGB888).rgbSwapped()
-                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
-                key = cv2.waitKey(1)
-                if key == 27:
-                    cv2.destroyAllWindows()
-                    return result_view
+            # visualize
+            result_view = (255 * result_window).astype(np.uint8)
+            result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+            cv2.imshow('synthesis window', result_view)
+            height, width, channel = result_view.shape
+            bytesPerLine = 3 * width
+            qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                QtGui.QImage.Format_RGB888).rgbSwapped()
+            self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+            key = cv2.waitKey(1)
+
+            # if visualize:
+            #     result_view = (255 * result_window).astype(np.uint8)
+            #     result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+            #     cv2.imshow('synthesis window', result_view)
+            #     height, width, channel = result_view.shape
+            #     bytesPerLine = 3 * width
+            #     qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+            #                         QtGui.QImage.Format_RGB888).rgbSwapped()
+            #     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+            #     key = cv2.waitKey(1)
+            #     if key == 27:
+            #         cv2.destroyAllWindows()
+            #         return result_view
 
         ### Fill in the other rows and columns
         for i in range(1, nH + 1):
@@ -400,25 +455,37 @@ class Ui_MainWindow(object):
 
                 result_window[(block_index_i):(block_index_i + blocksize), (block_index_j):(block_index_j + blocksize)] = minCutPatch
 
-                if visualize:
-                    result_view = (255 * result_window).astype(np.uint8)
-                    result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
-                    cv2.imshow('synthesis window', result_view)
-                    height, width, channel = result_view.shape
-                    bytesPerLine = 3 * width
-                    qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
-                                        QtGui.QImage.Format_RGB888).rgbSwapped()
-                    self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
-                    key = cv2.waitKey(1)
-                    if key == 27:
-                        cv2.destroyAllWindows()
-                        return result_view
+                # visualize
+                result_view = (255 * result_window).astype(np.uint8)
+                result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+                cv2.imshow('synthesis window', result_view)
+                height, width, channel = result_view.shape
+                bytesPerLine = 3 * width
+                qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                                    QtGui.QImage.Format_RGB888).rgbSwapped()
+                self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                key = cv2.waitKey(1)
+
+                # if visualize:
+                #     result_view = (255 * result_window).astype(np.uint8)
+                #     result_view = cv2.cvtColor(result_view, cv2.COLOR_RGB2BGR)
+                #     cv2.imshow('synthesis window', result_view)
+                #     height, width, channel = result_view.shape
+                #     bytesPerLine = 3 * width
+                #     qImg = QtGui.QImage(result_view.data, width, height, bytesPerLine,
+                #                         QtGui.QImage.Format_RGB888).rgbSwapped()
+                #     self.result.setPixmap(QtGui.QPixmap.fromImage(qImg))
+                #     key = cv2.waitKey(1)
+                #     if key == 27:
+                #         cv2.destroyAllWindows()
+                #         return result_view
 
             # print("{} out of {} rows complete...".format(i + 1, nH + 1))
 
 
 
         return result_view
+
 
 class Args(object):
     def __init__(self,sample_path,hight=50,width=50,overlap = 1/6,tolerance=0.1, kernel=20):
