@@ -9,7 +9,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>900</width>
+    <width>1000</width>
     <height>500</height>
    </rect>
   </property>
@@ -21,14 +21,14 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>900</width>
+    <width>1000</width>
     <height>500</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>900</width>
-    <height>500</height>
+    <width>1000</width>
+    <height>515</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -44,6 +44,9 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <property name="statusTip">
+       <string>no spaces in path!</string>
+      </property>
       <property name="text">
        <string>Insert Sample</string>
       </property>
@@ -56,6 +59,12 @@
         <width>16777215</width>
         <height>20</height>
        </size>
+      </property>
+      <property name="statusTip">
+       <string>no spaces in path!</string>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
       </property>
      </widget>
     </item>
@@ -119,6 +128,9 @@
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
+      <property name="statusTip">
+       <string>no spaces in path!</string>
+      </property>
       <property name="text">
        <string>Output Location</string>
       </property>
@@ -132,20 +144,23 @@
         <height>20</height>
        </size>
       </property>
+      <property name="statusTip">
+       <string>no spaces in path!</string>
+      </property>
      </widget>
     </item>
     <item row="1" column="6" rowspan="10" colspan="3">
      <widget class="QLabel" name="result">
       <property name="minimumSize">
        <size>
-        <width>590</width>
-        <height>390</height>
+        <width>600</width>
+        <height>400</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>590</width>
-        <height>390</height>
+        <width>600</width>
+        <height>400</height>
        </size>
       </property>
       <property name="autoFillBackground">
@@ -163,13 +178,13 @@
      <widget class="QLabel" name="sample">
       <property name="minimumSize">
        <size>
-        <width>250</width>
+        <width>300</width>
         <height>200</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>250</width>
+        <width>300</width>
         <height>200</height>
        </size>
       </property>
@@ -222,6 +237,12 @@
       <property name="cursor">
        <cursorShape>IBeamCursor</cursorShape>
       </property>
+      <property name="statusTip">
+       <string>width of the result image in pixels</string>
+      </property>
+      <property name="clearButtonEnabled">
+       <bool>false</bool>
+      </property>
      </widget>
     </item>
     <item row="5" column="4" rowspan="2">
@@ -251,6 +272,9 @@
         <width>50</width>
         <height>16777215</height>
        </size>
+      </property>
+      <property name="statusTip">
+       <string>hight of the result image in pixels</string>
       </property>
      </widget>
     </item>
@@ -296,6 +320,9 @@
       <property name="cursor">
        <cursorShape>IBeamCursor</cursorShape>
       </property>
+      <property name="statusTip">
+       <string>image quilting requires block size. non_parametric sampling requiers odd number kernel size (pixels)</string>
+      </property>
      </widget>
     </item>
     <item row="9" column="1">
@@ -319,6 +346,9 @@
       <property name="cursor">
        <cursorShape>IBeamCursor</cursorShape>
       </property>
+      <property name="statusTip">
+       <string>rms tolerance (0-1)</string>
+      </property>
      </widget>
     </item>
     <item row="10" column="1">
@@ -339,6 +369,9 @@
         <height>16777215</height>
        </size>
       </property>
+      <property name="statusTip">
+       <string>block overlap for image quilting (0-1)</string>
+      </property>
      </widget>
     </item>
     <item row="11" column="0" colspan="4">
@@ -355,18 +388,11 @@
         <bold>true</bold>
        </font>
       </property>
+      <property name="statusTip">
+       <string>create </string>
+      </property>
       <property name="text">
        <string>Generate Texture</string>
-      </property>
-     </widget>
-    </item>
-    <item row="11" column="6" colspan="3">
-     <widget class="QProgressBar" name="progressBar">
-      <property name="value">
-       <number>0</number>
-      </property>
-      <property name="textVisible">
-       <bool>true</bool>
       </property>
      </widget>
     </item>
